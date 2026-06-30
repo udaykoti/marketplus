@@ -29,6 +29,24 @@ def root():
     return {"status": "ok", "app": "MarketPulse AI"}
 
 
+@app.get("/api/diag")
+def diag():
+    import sys
+    import os
+    result = {"cwd": os.getcwd(), "tmp_writable": os.access("/tmp", os.W_OK), "vercel": os.environ.get("VERCEL")}
+    try:
+        import yfinance as yf
+        result["yfinance_imported"] = True
+        t = yf.Ticker("AAPL")
+        hist = t.history(period="1d", interval="1m")
+        result["hist_empty"] = hist.empty
+        if not hist.empty:
+            result["last_close"] = float(hist.iloc[-1]["Close"])
+    except Exception as e:
+        result["error"] = f"{type(e).__name__}: {str(e)}"
+    return result
+
+
 @app.get("/api/stocks")
 def get_stocks(tickers: str = Query(..., description="Comma-separated ticker symbols")):
     ticker_list = [t.strip() for t in tickers.split(",") if t.strip()]
