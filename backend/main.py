@@ -31,19 +31,13 @@ def root():
 
 @app.get("/api/diag")
 def diag():
-    import sys
-    import os
-    result = {"cwd": os.getcwd(), "tmp_writable": os.access("/tmp", os.W_OK), "vercel": os.environ.get("VERCEL")}
+    import sys, os, traceback
+    result = {"cwd": os.getcwd(), "vercel": os.environ.get("VERCEL")}
     try:
-        import yfinance as yf
-        result["yfinance_imported"] = True
-        t = yf.Ticker("AAPL")
-        hist = t.history(period="1d", interval="1m")
-        result["hist_empty"] = hist.empty
-        if not hist.empty:
-            result["last_close"] = float(hist.iloc[-1]["Close"])
+        import yfinance
+        result["yfinance_ok"] = True
     except Exception as e:
-        result["error"] = f"{type(e).__name__}: {str(e)}"
+        result["yfinance_error"] = traceback.format_exc()
     return result
 
 
