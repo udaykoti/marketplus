@@ -1,6 +1,5 @@
-import asyncio
 import json
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Query
+from fastapi import FastAPI, Query
 from fastapi.middleware.cors import CORSMiddleware
 import config
 
@@ -32,31 +31,19 @@ def root():
     return {"status": "ok", "app": "MarketPulse AI"}
 
 
-@app.websocket("/ws/stocks")
-async def ws_stocks(websocket: WebSocket):
-    await websocket.accept()
-    try:
-        message = await websocket.receive_text()
-        data = json.loads(message)
-        tickers = data.get("tickers", [])
-
-        while True:
-            results = {}
-            for ticker in tickers:
-                stock = get_stock_data(ticker)
-                if stock and "error" not in stock:
-                    insert_price(ticker, stock["price"], stock["volume"], stock["changePercent"])
-                    anomaly = check_anomaly(ticker, stock["price"], stock["volume"])
-                    if anomaly:
-                        stock["anomaly"] = anomaly
-                results[ticker] = stock
-
-            await websocket.send_text(json.dumps(results))
-            await asyncio.sleep(2)
-    except WebSocketDisconnect:
-        pass
-    except Exception:
-        pass
+@app.get("/api/stocks")
+def get_stocks(tickers: str = Query(..., description="Comma-separated ticker symbols")):
+    ticker_list = [t.strip() for t in tickers.split(",") if t.strip()]
+    results = {}
+    for ticker in ticker_list:
+        stock = get_stock_data(ticker)
+        if stock and "error" not in stock:
+            insert_price(ticker, stock["price"], stock["volume"], stock["changePercent"])
+            anomaly = check_anomaly(ticker, stock["price"], stock["volume"])
+            if anomaly:
+                stock["anomaly"] = anomaly
+        results[ticker] = stock
+    return results
 
 
 @app.get("/api/stock/{ticker}/history")

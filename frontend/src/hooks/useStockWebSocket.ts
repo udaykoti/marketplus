@@ -1,59 +1,45 @@
-import { useEffect, useRef, useState, useCallback } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { StockData } from '../types';
 
-const WS_URL = import.meta.env.VITE_WS_URL || 'ws://localhost:8000';
+const API = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
 
 export function useStockWebSocket(tickers: string[]) {
   const [stockData, setStockData] = useState<Record<string, StockData>>({});
   const [connected, setConnected] = useState(false);
   const [reconnecting, setReconnecting] = useState(false);
-  const wsRef = useRef<WebSocket | null>(null);
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const tickersRef = useRef(tickers);
   tickersRef.current = tickers;
 
-  const connect = useCallback(() => {
-    if (tickersRef.current.length === 0) return;
-
-    const ws = new WebSocket(`${WS_URL}/ws/stocks`);
-    wsRef.current = ws;
-
-    ws.onopen = () => {
-      setConnected(true);
+  useEffect(() => {
+    if (tickers.length === 0) {
+      setConnected(false);
       setReconnecting(false);
-      ws.send(JSON.stringify({ tickers: tickersRef.current }));
-    };
+      setStockData({});
+      return;
+    }
 
-    ws.onmessage = (event) => {
+    const poll = async () => {
       try {
-        const data = JSON.parse(event.data);
-        setStockData((prev) => ({ ...prev, ...data }));
+        const res = await fetch(`${API}/api/stocks?tickers=${tickersRef.current.join(',')}`);
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        const data = await res.json();
+        setStockData(data);
+        setConnected(true);
+        setReconnecting(false);
       } catch {
-        // ignore parse errors
+        setConnected(false);
+        setReconnecting(true);
       }
     };
 
-    ws.onclose = () => {
-      setConnected(false);
-      setReconnecting(true);
-      setTimeout(() => connect(), 3000);
-    };
+    poll();
+    intervalRef.current = setInterval(poll, 3000);
 
-    ws.onerror = () => {
-      ws.close();
-    };
-  }, []);
-
-  useEffect(() => {
-    connect();
     return () => {
-      wsRef.current?.close();
+      if (intervalRef.current) clearInterval(intervalRef.current);
+      intervalRef.current = null;
     };
-  }, [connect]);
-
-  useEffect(() => {
-    if (wsRef.current?.readyState === WebSocket.OPEN) {
-      wsRef.current.send(JSON.stringify({ tickers }));
-    }
   }, [tickers]);
 
   return { stockData, connected, reconnecting };
