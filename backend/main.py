@@ -32,13 +32,14 @@ def root():
 
 @app.get("/api/diag")
 def diag():
-    import traceback
+    import traceback, requests
     result = {"vercel": os.environ.get("VERCEL")}
     try:
-        import yfinance as yf
-        t = yf.Ticker("AAPL")
-        info = t.info
-        result["name"] = info.get("longName", "N/A")
+        url = "https://query1.finance.yahoo.com/v8/finance/chart/AAPL?interval=1m&range=1d"
+        headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
+        r = requests.get(url, headers=headers, timeout=15)
+        result["status"] = r.status_code
+        result["has_data"] = "chart" in r.json()
     except Exception as e:
         result["error"] = traceback.format_exc()
     return result
