@@ -3,7 +3,6 @@ import pandas as pd
 
 _HEADERS = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
 _CHART_URL = "https://query1.finance.yahoo.com/v8/finance/chart/{ticker}"
-_QUOTE_URL = "https://query1.finance.yahoo.com/v7/finance/quote?symbols={ticker}"
 
 
 def get_stock_data(ticker):
@@ -58,16 +57,20 @@ def get_historical_data(ticker):
 
 def get_ticker_info(ticker):
     try:
-        r = requests.get(_QUOTE_URL.format(ticker=ticker), headers=_HEADERS, timeout=15)
+        url = "https://query1.finance.yahoo.com/v1/finance/search?q={t}"
+        r = requests.get(url.format(t=ticker), headers=_HEADERS, timeout=15)
         r.raise_for_status()
-        info = r.json()["quoteResponse"]["result"][0]
+        quotes = r.json().get("quotes", [])
+        if not quotes:
+            return {"name": ticker, "error": "No info found"}
+        info = quotes[0]
         return {
-            "name": info.get("longName", info.get("shortName", ticker)),
+            "name": info.get("longname", info.get("shortname", ticker)),
             "sector": info.get("sector", "N/A"),
-            "marketCap": info.get("marketCap", 0),
-            "peRatio": info.get("trailingPE", info.get("forwardPE", 0)),
-            "week52High": info.get("fiftyTwoWeekHigh", 0),
-            "week52Low": info.get("fiftyTwoWeekLow", 0),
+            "marketCap": 0,
+            "peRatio": 0,
+            "week52High": 0,
+            "week52Low": 0,
         }
     except Exception:
         return {"name": ticker, "error": "Could not fetch info"}
