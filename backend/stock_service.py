@@ -1,27 +1,38 @@
-import yfinance as yf
+import requests
+import pandas as pd
+
+_HEADERS = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
+_CHART_URL = "https://query1.finance.yahoo.com/v8/finance/chart/{ticker}"
+_QUOTE_URL = "https://query1.finance.yahoo.com/v7/finance/quote?symbols={ticker}"
 
 
 def get_stock_data(ticker):
     try:
-        ticker_obj = yf.Ticker(ticker)
-        hist = ticker_obj.history(period="5d", interval="1m")
-        if hist.empty:
+        params = {"interval": "1m", "range": "5d"}
+        r = requests.get(_CHART_URL.format(ticker=ticker), params=params, headers=_HEADERS, timeout=15)
+        r.raise_for_status()
+        data = r.json()["chart"]["result"][0]
+        meta = data["meta"]
+        quotes = data["indicators"]["quote"][0]
+        timestamps = data["timestamp"]
+
+        closes = [c for c in quotes["close"] if c is not None]
+        if not closes:
             return None
 
-        latest = hist.iloc[-1]
-        prev_close = hist["Close"].iloc[-2] if len(hist) > 1 else latest["Open"]
-        current_price = round(float(latest["Close"]), 2)
+        current_price = round(closes[-1], 2)
+        prev_close = round(closes[-2] if len(closes) > 1 else meta.get("chartPreviousClose", current_price), 2)
         change_percent = round(((current_price - prev_close) / prev_close) * 100, 2)
 
         return {
             "ticker": ticker.upper(),
             "price": current_price,
-            "open": round(float(latest["Open"]), 2),
-            "high": round(float(latest["High"]), 2),
-            "low": round(float(latest["Low"]), 2),
-            "volume": int(latest["Volume"]),
+            "open": round(quotes["open"][-1], 2) if quotes["open"][-1] else 0,
+            "high": round(max(c for c in quotes["high"] if c is not None), 2),
+            "low": round(min(c for c in quotes["low"] if c is not None), 2),
+            "volume": int(quotes["volume"][-1]) if quotes["volume"][-1] else 0,
             "changePercent": change_percent,
-            "timestamp": str(latest.name),
+            "timestamp": pd.Timestamp(timestamps[-1], unit="s").isoformat(),
         }
     except Exception as e:
         return {"ticker": ticker.upper(), "error": str(e)}
@@ -29,14 +40,17 @@ def get_stock_data(ticker):
 
 def get_historical_data(ticker):
     try:
-        ticker_obj = yf.Ticker(ticker)
-        hist = ticker_obj.history(period="1mo", interval="1d")
-        if hist.empty:
-            return []
+        params = {"interval": "1d", "range": "1mo"}
+        r = requests.get(_CHART_URL.format(ticker=ticker), params=params, headers=_HEADERS, timeout=15)
+        r.raise_for_status()
+        data = r.json()["chart"]["result"][0]
+        quotes = data["indicators"]["quote"][0]
+        timestamps = data["timestamp"]
 
         return [
-            {"date": str(idx.date()), "price": round(float(row["Close"]), 2)}
-            for idx, row in hist.iterrows()
+            {"date": pd.Timestamp(ts, unit="s").strftime("%Y-%m-%d"), "price": round(c, 2)}
+            for ts, c in zip(timestamps, quotes["close"])
+            if c is not None
         ]
     except Exception:
         return []
@@ -44,8 +58,9 @@ def get_historical_data(ticker):
 
 def get_ticker_info(ticker):
     try:
-        ticker_obj = yf.Ticker(ticker)
-        info = ticker_obj.info
+        r = requests.get(_QUOTE_URL.format(ticker=ticker), headers=_HEADERS, timeout=15)
+        r.raise_for_status()
+        info = r.json()["quoteResponse"]["result"][0]
         return {
             "name": info.get("longName", info.get("shortName", ticker)),
             "sector": info.get("sector", "N/A"),
