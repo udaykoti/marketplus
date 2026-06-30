@@ -37,10 +37,8 @@ def diag():
     try:
         import yfinance as yf
         t = yf.Ticker("AAPL")
-        hist = t.history(period="5d", interval="1m")
-        result["hist_empty"] = hist.empty
-        if not hist.empty:
-            result["last_close"] = float(hist.iloc[-1]["Close"])
+        info = t.info
+        result["name"] = info.get("longName", "N/A")
     except Exception as e:
         result["error"] = traceback.format_exc()
     return result
