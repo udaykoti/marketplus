@@ -1,7 +1,8 @@
+import os
 import sqlite3
 import datetime
 
-DB_PATH = "marketpulse.db"
+DB_PATH = os.path.join(os.environ.get("VERCEL") and "/tmp" or ".", "marketpulse.db")
 
 
 def get_connection():
