@@ -1,4 +1,5 @@
 import json
+import os
 from fastapi import FastAPI, Query
 from fastapi.middleware.cors import CORSMiddleware
 import config
@@ -31,13 +32,17 @@ def root():
 
 @app.get("/api/diag")
 def diag():
-    import sys, os, traceback
-    result = {"cwd": os.getcwd(), "vercel": os.environ.get("VERCEL")}
+    import traceback
+    result = {"vercel": os.environ.get("VERCEL")}
     try:
-        import yfinance
-        result["yfinance_ok"] = True
+        import yfinance as yf
+        t = yf.Ticker("AAPL")
+        hist = t.history(period="5d", interval="1m")
+        result["hist_empty"] = hist.empty
+        if not hist.empty:
+            result["last_close"] = float(hist.iloc[-1]["Close"])
     except Exception as e:
-        result["yfinance_error"] = traceback.format_exc()
+        result["error"] = traceback.format_exc()
     return result
 
 
